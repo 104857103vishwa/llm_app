@@ -86,7 +86,6 @@ for message in st.session_state.messages:
 
 # --- USER INPUT FEATURE ---
 st.markdown("### 💬 Ask a Question")
-# Always show the chat input so the user can type their own question
 user_input = st.chat_input("What do you want to know?", key="regular_question_input")
 
 # --- POPULAR QUESTIONS SECTION (below the chat input) ---
@@ -132,21 +131,32 @@ if prompt:
 
     with st.spinner("Searching for an answer..."):
         try:
-            response = requests.post(CHATBOT_URL, headers=headers, json=data)
+            # Set a timeout to prevent hanging requests
+            response = requests.post(CHATBOT_URL, headers=headers, json=data, timeout=10)  # 10-second timeout
+
+            # Check if the response was successful
             if response.status_code == 200:
-                output_text = response.json()["output"]
-                explanation = response.json()["intermediate_steps"]
+                output_text = response.json().get("output", "No output available.")
+                explanation = response.json().get("intermediate_steps", "No explanation available.")
                 elapsed_time = response.json().get("elapsed_time", "N/A")
             else:
-                raise Exception("Backend error")
+                raise requests.exceptions.HTTPError(f"Error: {response.status_code}")
+
+        except requests.exceptions.Timeout:
+            output_text = "The request timed out. Please try again later."
+            explanation = "The system took too long to respond. This could be due to high server load or a slow network."
+            elapsed_time = "N/A"
+        except requests.exceptions.HTTPError as e:
+            output_text = f"Unable to fetch results at the moment. (HTTP Error: {e})"
+            explanation = "There was an issue with the server while processing your request."
+            elapsed_time = "N/A"
+        except requests.exceptions.RequestException as e:
+            output_text = "An error occurred while processing your request. Please try again later."
+            explanation = f"Error: {e}"
+            elapsed_time = "N/A"
         except Exception as e:
-            output_text = (
-                "Thank you for your question. While our system is currently offline, "
-                "here's a sample answer: *If you are a carrier of a BRCA1 or BRCA2 mutation, "
-                "it is important to follow recommended screening guidelines. Please consult with "
-                "your healthcare provider to ensure your screening schedule is appropriate for your age and risk level.*"
-            )
-            explanation = "This is a placeholder response provided while the backend is offline."
+            output_text = "An unexpected error occurred. Please try again later."
+            explanation = f"Unexpected Error: {e}"
             elapsed_time = "N/A"
 
     st.markdown(
